@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useAuth } from '../../hooks/useAuth'
+import { useAuthContext } from '../../hooks/AuthContext'
 import { apiService } from '../../lib/api'
 import { Eye, EyeOff, Mail, Lock, Code } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -14,7 +14,7 @@ export const AuthForm = ({ isLogin, onToggle }) => {
   const [success, setSuccess] = useState('')
   const [signupSuccess, setSignupSuccess] = useState(false)
 
-  const { signIn, signUp, signInWithGoogle } = useAuth()
+  const { signIn, signUp, signInWithGoogle } = useAuthContext()
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {

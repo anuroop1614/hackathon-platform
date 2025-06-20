@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '../../hooks/useAuth';
-import { apiService } from '../../lib/api';
-import EmailService from '../../lib/emailService';
+import { useAuthContext } from '../../hooks/AuthContext';
 import { Calendar, Users, PlusCircle } from 'lucide-react';
 
 export const FacultyDashboard = () => {
-  const { user } = useAuth();
+  const { user } = useAuthContext();
   const [hackathons, setHackathons] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', date: '' });
@@ -15,7 +13,10 @@ export const FacultyDashboard = () => {
   const loadHackathons = async () => {
     if (user) {
       try {
-        const facultyHackathons = await apiService.getHackathonsByFaculty(user.uid);
+        const response = await fetch('https://hackathon-platform-1.onrender.com/api/hackathons');
+        const allHackathons = await response.json();
+        // Filter hackathons created by this faculty
+        const facultyHackathons = allHackathons.filter(h => h.faculty_id === user.uid);
         setHackathons(facultyHackathons);
       } catch (err) {
         console.error('Error loading hackathons:', err);
@@ -47,22 +48,21 @@ export const FacultyDashboard = () => {
         faculty_id: user.uid,
       };
 
-      const result = await apiService.createHackathon(hackathonData);
-      console.log('Hackathon created successfully:', result);
-      
-      // Send hackathon creation confirmation email
-      try {
-        console.log('🔄 Sending hackathon creation email to faculty:', user.email);
-        console.log('📧 Faculty info:', {
-          isGoogleUser: !!user?.providerData?.find(p => p.providerId === 'google.com'),
-          userEmail: user?.email,
-          displayName: user?.displayName
-        });
-        await EmailService.sendHackathonCreatedEmail(user.email || '', form.title);
-        console.log('✅ Hackathon creation confirmation email sent to:', user.email);
-      } catch (emailError) {
-        console.log('⚠️ Email sending failed, but hackathon was created successfully');
+      const response = await fetch('https://hackathon-platform-1.onrender.com/api/createHackathon', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(hackathonData)
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create hackathon');
       }
+
+      console.log('Hackathon created successfully:', result);
       
       setForm({ title: '', description: '', date: '' });
       setShowModal(false);

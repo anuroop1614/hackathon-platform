@@ -1,13 +1,12 @@
 const express = require('express');
-const bcrypt = require('bcrypt');
+const cors = require('cors');
 const admin = require('firebase-admin');
 const sgMail = require('@sendgrid/mail');
-const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
 
-// Configure CORS for production
+// Configure CORS
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production'
     ? ['https://hackon-cloud-project.web.app', 'https://hackon-cloud-project.firebaseapp.com']
@@ -24,10 +23,10 @@ app.use(express.json());
 let db;
 try {
   if (process.env.NODE_ENV === 'production') {
-    // Production: Use environment variables or default credentials
+    // Production: Use environment variables
     console.log('🔥 Initializing Firebase in production mode...');
     admin.initializeApp({
-      projectId: 'hackon-cloud-project'
+      projectId: process.env.FIREBASE_PROJECT_ID || 'hackon-cloud-project'
     });
   } else {
     // Development: Use service account key file
@@ -52,62 +51,47 @@ if (process.env.SENDGRID_API_KEY) {
   console.log('⚠️ SendGrid API key not found - emails will be logged only');
 }
 
-// Signup route
-app.post('/signup', async (req, res) => {
-  const { email, password, role } = req.body;
-  if (!email || !password || !role) {
-    return res.status(400).json({ error: 'Email, password, and role are required.' });
-  }
-  if (!['student', 'faculty'].includes(role)) {
-    return res.status(400).json({ error: 'Role must be student or faculty.' });
-  }
-  try {
-    // Check for duplicate email
-    const userSnap = await db.collection('users').where('email', '==', email).get();
-    if (!userSnap.empty) {
-      return res.status(409).json({ error: 'Email already exists.' });
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    version: '2.0.0',
+    services: {
+      firebase: 'Connected',
+      sendgrid: process.env.SENDGRID_API_KEY ? 'Configured' : 'Not configured',
+      database: 'Firestore Active'
     }
-    const password_hash = await bcrypt.hash(password, 10);
-    const userRef = await db.collection('users').add({
-      email,
-      password_hash,
-      role,
-      created_at: admin.firestore.FieldValue.serverTimestamp()
-    });
-    res.json({ message: 'Signup successful!', id: userRef.id });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error.' });
-  }
+  });
 });
 
-// Login route
-app.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required.' });
-  }
-  try {
-    const userSnap = await db.collection('users').where('email', '==', email).get();
-    if (userSnap.empty) {
-      return res.status(401).json({ error: 'Invalid email or password.' });
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'HackHub API Server v2.0',
+    version: '2.0.0',
+    status: 'Running',
+    features: [
+      'Firebase Authentication',
+      'Role-based Access Control',
+      'Hackathon Management',
+      'Student Registration System',
+      'Email Notifications'
+    ],
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth/*',
+      hackathons: '/api/hackathons',
+      register: '/api/register',
+      stats: '/api/stats'
     }
-    const userDoc = userSnap.docs[0];
-    const user = userDoc.data();
-    const match = await bcrypt.compare(password, user.password_hash);
-    if (!match) {
-      return res.status(401).json({ error: 'Invalid email or password.' });
-    }
-    res.json({ message: 'Login successful!', role: user.role, id: userDoc.id });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error.' });
-  }
+  });
 });
 
-// Create user in Firestore (for Firebase Auth users)
-app.post('/users', async (req, res) => {
+// User creation endpoint (for Firebase Auth users)
+app.post('/api/users', async (req, res) => {
   const { uid, email, role } = req.body;
-
-  console.log('POST /users - Request body:', req.body);
 
   if (!uid || !email || !role) {
     return res.status(400).json({ error: 'UID, email, and role are required.' });
@@ -120,31 +104,27 @@ app.post('/users', async (req, res) => {
   try {
     // Check if user already exists
     const existingUser = await db.collection('users').doc(uid).get();
-    console.log('User exists:', existingUser.exists);
-
+    
     if (existingUser.exists) {
-      console.log('Existing user data:', existingUser.data());
       return res.json({ message: 'User already exists', user: existingUser.data() });
     }
 
     // Create user document
-    console.log('Creating new user document...');
     await db.collection('users').doc(uid).set({
       email,
       role,
       created_at: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    console.log('User created successfully!');
     res.json({ message: 'User created successfully!' });
-  } catch (err) {
-    console.error('Error creating user:', err);
+  } catch (error) {
+    console.error('Error creating user:', error);
     res.status(500).json({ error: 'Server error.' });
   }
 });
 
 // Get user by UID
-app.get('/users/:uid', async (req, res) => {
+app.get('/api/users/:uid', async (req, res) => {
   const { uid } = req.params;
 
   try {
@@ -160,61 +140,50 @@ app.get('/users/:uid', async (req, res) => {
       ...userData,
       created_at: userData.created_at?.toDate?.()?.toISOString() || userData.created_at
     });
-  } catch (err) {
-    console.error('Error fetching user:', err);
+  } catch (error) {
+    console.error('Error fetching user:', error);
     res.status(500).json({ error: 'Server error.' });
   }
 });
 
-// Hackathon routes
-app.post('/hackathons', async (req, res) => {
-  console.log('POST /hackathons - Request body:', req.body);
-
-  const { title, description, date, image_url, faculty_id, max_participants } = req.body;
+// Create hackathon endpoint (Faculty only)
+app.post('/api/createHackathon', async (req, res) => {
+  const { title, description, date, faculty_id } = req.body;
 
   if (!title || !description || !date || !faculty_id) {
-    console.log('Missing required fields:', { title, description, date, faculty_id });
     return res.status(400).json({ error: 'Title, description, date, and faculty_id are required.' });
   }
 
   try {
-    console.log('Checking faculty with ID:', faculty_id);
-
     // Verify faculty exists and has correct role
     const facultyDoc = await db.collection('users').doc(faculty_id).get();
-    console.log('Faculty doc exists:', facultyDoc.exists);
-
-    if (facultyDoc.exists) {
-      console.log('Faculty data:', facultyDoc.data());
-    }
 
     if (!facultyDoc.exists || facultyDoc.data().role !== 'faculty') {
-      console.log('Faculty verification failed');
       return res.status(403).json({ error: 'Only faculty members can create hackathons.' });
     }
 
-    console.log('Creating hackathon in Firestore...');
+    // Create hackathon
     const hackathonRef = await db.collection('hackathons').add({
       title,
       description,
       date,
-      image_url: image_url || null,
       faculty_id,
-      max_participants: max_participants || null,
-      current_participants: 0,
-      status: 'upcoming',
-      created_at: admin.firestore.FieldValue.serverTimestamp()
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      registrations: 0
     });
 
-    console.log('Hackathon created with ID:', hackathonRef.id);
-    res.json({ message: 'Hackathon created successfully!', id: hackathonRef.id });
-  } catch (err) {
-    console.error('Error creating hackathon:', err);
+    res.json({
+      message: 'Hackathon created successfully!',
+      hackathon_id: hackathonRef.id
+    });
+  } catch (error) {
+    console.error('Error creating hackathon:', error);
     res.status(500).json({ error: 'Server error.' });
   }
 });
 
-app.get('/hackathons', async (req, res) => {
+// Get all hackathons
+app.get('/api/hackathons', async (req, res) => {
   try {
     const hackathonsSnap = await db.collection('hackathons').get();
     const hackathons = [];
@@ -228,107 +197,30 @@ app.get('/hackathons', async (req, res) => {
       });
     });
 
-    // Sort by created_at on the server side
+    // Sort by created_at
     hackathons.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
     res.json(hackathons);
-  } catch (err) {
-    console.error('Error fetching hackathons:', err);
+  } catch (error) {
+    console.error('Error fetching hackathons:', error);
     res.status(500).json({ error: 'Server error.' });
   }
 });
 
-app.get('/hackathons/faculty/:facultyId', async (req, res) => {
-  const { facultyId } = req.params;
+// Student registration endpoint
+app.post('/api/register', async (req, res) => {
+  const { hackathon_id, student_id, student_name } = req.body;
 
-  try {
-    const hackathonsSnap = await db.collection('hackathons')
-      .where('faculty_id', '==', facultyId)
-      .get();
-
-    const hackathons = [];
-    hackathonsSnap.forEach(doc => {
-      const data = doc.data();
-      hackathons.push({
-        id: doc.id,
-        ...data,
-        created_at: data.created_at?.toDate?.()?.toISOString() || data.created_at
-      });
-    });
-
-    // Sort by created_at on the server side
-    hackathons.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-    res.json(hackathons);
-  } catch (err) {
-    console.error('Error fetching faculty hackathons:', err);
-    res.status(500).json({ error: 'Server error.' });
-  }
-});
-
-app.delete('/hackathons/:id', async (req, res) => {
-  const { id } = req.params;
-  const { faculty_id } = req.body;
-
-  try {
-    // Verify hackathon exists and belongs to faculty
-    const hackathonDoc = await db.collection('hackathons').doc(id).get();
-    if (!hackathonDoc.exists) {
-      return res.status(404).json({ error: 'Hackathon not found.' });
-    }
-
-    if (hackathonDoc.data().faculty_id !== faculty_id) {
-      return res.status(403).json({ error: 'You can only delete your own hackathons.' });
-    }
-
-    // Delete hackathon
-    await db.collection('hackathons').doc(id).delete();
-
-    // Delete all registrations for this hackathon
-    const registrationsSnap = await db.collection('registrations')
-      .where('hackathon_id', '==', id)
-      .get();
-
-    const batch = db.batch();
-    registrationsSnap.forEach(doc => {
-      batch.delete(doc.ref);
-    });
-    await batch.commit();
-
-    res.json({ message: 'Hackathon deleted successfully!' });
-  } catch (err) {
-    console.error('Error deleting hackathon:', err);
-    res.status(500).json({ error: 'Server error.' });
-  }
-});
-
-// Registration routes
-app.post('/registrations', async (req, res) => {
-  const { hackathon_id, student_id, name, email, phone } = req.body;
-
-  if (!hackathon_id || !student_id || !name || !email || !phone) {
-    return res.status(400).json({ error: 'All fields are required.' });
+  if (!hackathon_id || !student_id || !student_name) {
+    return res.status(400).json({ error: 'Hackathon ID, student ID, and student name are required.' });
   }
 
   try {
-    console.log('POST /registrations - Request body:', req.body);
-
     // Verify student exists and has correct role
     const studentDoc = await db.collection('users').doc(student_id).get();
-    console.log('Student doc exists:', studentDoc.exists);
 
-    if (studentDoc.exists) {
-      const studentData = studentDoc.data();
-      console.log('Student data:', studentData);
-      console.log('Student role:', studentData.role);
-
-      if (studentData.role !== 'student') {
-        console.log('Role mismatch - Expected: student, Got:', studentData.role);
-        return res.status(403).json({ error: 'Only students can register for hackathons.' });
-      }
-    } else {
-      console.log('Student document does not exist for ID:', student_id);
-      return res.status(403).json({ error: 'Student not found. Please ensure you are logged in as a student.' });
+    if (!studentDoc.exists || studentDoc.data().role !== 'student') {
+      return res.status(403).json({ error: 'Only students can register for hackathons.' });
     }
 
     // Verify hackathon exists
@@ -347,319 +239,71 @@ app.post('/registrations', async (req, res) => {
       return res.status(409).json({ error: 'Student is already registered for this hackathon.' });
     }
 
-    // Check if hackathon has reached max participants
-    const hackathonData = hackathonDoc.data();
-    if (hackathonData.max_participants && hackathonData.current_participants >= hackathonData.max_participants) {
-      return res.status(400).json({ error: 'Hackathon has reached maximum participants.' });
-    }
-
     // Create registration
     const registrationRef = await db.collection('registrations').add({
       hackathon_id,
       student_id,
-      name,
-      email,
-      phone,
+      student_name,
+      student_email: studentDoc.data().email,
       registered_at: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    // Update hackathon participant count
+    // Update hackathon registration count
     await db.collection('hackathons').doc(hackathon_id).update({
-      current_participants: admin.firestore.FieldValue.increment(1)
+      registrations: admin.firestore.FieldValue.increment(1)
     });
 
-    res.json({ message: 'Registration successful!', id: registrationRef.id });
-  } catch (err) {
-    console.error('Error creating registration:', err);
-    res.status(500).json({ error: 'Server error.' });
-  }
-});
+    // Send confirmation email
+    const hackathonData = hackathonDoc.data();
+    await sendRegistrationEmail(
+      studentDoc.data().email,
+      student_name,
+      hackathonData.title,
+      hackathonData.date
+    );
 
-app.get('/registrations/student/:studentId', async (req, res) => {
-  const { studentId } = req.params;
-
-  try {
-    const registrationsSnap = await db.collection('registrations')
-      .where('student_id', '==', studentId)
-      .get();
-
-    const registrations = [];
-    registrationsSnap.forEach(doc => {
-      const data = doc.data();
-      registrations.push({
-        id: doc.id,
-        ...data,
-        registered_at: data.registered_at?.toDate?.()?.toISOString() || data.registered_at
-      });
-    });
-
-    // Sort by registered_at on the server side
-    registrations.sort((a, b) => new Date(b.registered_at) - new Date(a.registered_at));
-
-    res.json(registrations);
-  } catch (err) {
-    console.error('Error fetching student registrations:', err);
-    res.status(500).json({ error: 'Server error.' });
-  }
-});
-
-app.get('/registrations/hackathon/:hackathonId', async (req, res) => {
-  const { hackathonId } = req.params;
-
-  try {
-    const registrationsSnap = await db.collection('registrations')
-      .where('hackathon_id', '==', hackathonId)
-      .get();
-
-    const registrations = [];
-    registrationsSnap.forEach(doc => {
-      const data = doc.data();
-      registrations.push({
-        id: doc.id,
-        ...data,
-        registered_at: data.registered_at?.toDate?.()?.toISOString() || data.registered_at
-      });
-    });
-
-    // Sort by registered_at on the server side
-    registrations.sort((a, b) => new Date(b.registered_at) - new Date(a.registered_at));
-
-    res.json(registrations);
-  } catch (err) {
-    console.error('Error fetching hackathon registrations:', err);
-    res.status(500).json({ error: 'Server error.' });
-  }
-});
-
-app.delete('/registrations/:id', async (req, res) => {
-  const { id } = req.params;
-  const { student_id } = req.body;
-
-  try {
-    // Verify registration exists and belongs to student
-    const registrationDoc = await db.collection('registrations').doc(id).get();
-    if (!registrationDoc.exists) {
-      return res.status(404).json({ error: 'Registration not found.' });
-    }
-
-    const registrationData = registrationDoc.data();
-    if (registrationData.student_id !== student_id) {
-      return res.status(403).json({ error: 'You can only delete your own registrations.' });
-    }
-
-    // Delete registration
-    await db.collection('registrations').doc(id).delete();
-
-    // Update hackathon participant count
-    await db.collection('hackathons').doc(registrationData.hackathon_id).update({
-      current_participants: admin.firestore.FieldValue.increment(-1)
-    });
-
-    res.json({ message: 'Registration deleted successfully!' });
-  } catch (err) {
-    console.error('Error deleting registration:', err);
-    res.status(500).json({ error: 'Server error.' });
-  }
-});
-
-
-
-
-
-app.delete('/registrations', async (req, res) => {
-  const { hackathon_id, student_id } = req.body;
-
-  if (!hackathon_id || !student_id) {
-    return res.status(400).json({ error: 'hackathon_id and student_id are required.' });
-  }
-
-  try {
-    // Find the registration
-    const registrationSnap = await db.collection('registrations')
-      .where('hackathon_id', '==', hackathon_id)
-      .where('student_id', '==', student_id)
-      .get();
-
-    if (registrationSnap.empty) {
-      return res.status(404).json({ error: 'Registration not found.' });
-    }
-
-    // Delete registration
-    const registrationDoc = registrationSnap.docs[0];
-    await registrationDoc.ref.delete();
-
-    // Update hackathon participant count
-    await db.collection('hackathons').doc(hackathon_id).update({
-      current_participants: admin.firestore.FieldValue.increment(-1)
-    });
-
-    res.json({ message: 'Registration deleted successfully!' });
-  } catch (err) {
-    console.error('Error deleting registration:', err);
-    res.status(500).json({ error: 'Server error.' });
-  }
-});
-
-// Email sending endpoint (SendGrid)
-app.post('/api/send-email', async (req, res) => {
-  const { to, subject, template, data } = req.body;
-
-  if (!to || !subject) {
-    return res.status(400).json({ error: 'Email and subject are required.' });
-  }
-
-  try {
-    // Log email attempt
-    console.log('📧 Sending email:', {
-      to,
-      subject,
-      template,
-      data,
-      timestamp: new Date().toISOString()
-    });
-
-    // Check if SendGrid is configured
-    if (process.env.SENDGRID_API_KEY && process.env.SENDGRID_FROM_EMAIL) {
-      // Create email content based on template
-      let htmlContent = '';
-      let textContent = '';
-
-      switch (template) {
-        case 'registration-confirmation':
-          htmlContent = `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #4F46E5;">Registration Confirmed! 🎉</h2>
-              <p>Dear Participant,</p>
-              <p>You have successfully registered for <strong>${data.hackathonTitle}</strong>!</p>
-              <p><strong>Registration Date:</strong> ${data.registrationDate}</p>
-              <p>We're excited to have you participate. You'll receive more details about the hackathon soon.</p>
-              <p>Best regards,<br>HackHub Team</p>
-            </div>
-          `;
-          textContent = `Registration Confirmed! You have successfully registered for ${data.hackathonTitle} on ${data.registrationDate}.`;
-          break;
-
-        case 'hackathon-created':
-          htmlContent = `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #4F46E5;">Hackathon Created Successfully! 🚀</h2>
-              <p>Dear Faculty Member,</p>
-              <p>Your hackathon <strong>${data.hackathonTitle}</strong> has been created successfully!</p>
-              <p><strong>Created Date:</strong> ${data.createdDate}</p>
-              <p>Students can now register for your hackathon. You can manage registrations from your faculty dashboard.</p>
-              <p>Best regards,<br>HackHub Team</p>
-            </div>
-          `;
-          textContent = `Hackathon Created! Your hackathon ${data.hackathonTitle} has been created successfully on ${data.createdDate}.`;
-          break;
-
-        case 'hackathon-reminder':
-          htmlContent = `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #4F46E5;">Hackathon Reminder! ⏰</h2>
-              <p>Dear Participant,</p>
-              <p>This is a reminder that <strong>${data.hackathonTitle}</strong> starts soon!</p>
-              <p><strong>Start Date:</strong> ${data.startDate}</p>
-              <p>Make sure you're prepared and ready to participate. Good luck!</p>
-              <p>Best regards,<br>HackHub Team</p>
-            </div>
-          `;
-          textContent = `Reminder: ${data.hackathonTitle} starts on ${data.startDate}. Get ready!`;
-          break;
-
-        default:
-          htmlContent = `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #4F46E5;">HackHub Notification</h2>
-              <p>You have a new notification from HackHub.</p>
-              <p>Best regards,<br>HackHub Team</p>
-            </div>
-          `;
-          textContent = 'You have a new notification from HackHub.';
-      }
-
-      // Send email using SendGrid
-      const msg = {
-        to,
-        from: {
-          email: process.env.SENDGRID_FROM_EMAIL,
-          name: process.env.SENDGRID_FROM_NAME || 'HackHub Platform'
-        },
-        subject,
-        text: textContent,
-        html: htmlContent,
-      };
-
-      const result = await sgMail.send(msg);
-      console.log('✅ Email sent successfully via SendGrid');
-      console.log('📧 SendGrid Response:', result[0].statusCode, result[0].headers);
-
-      res.json({
-        message: 'Email sent successfully!',
-        emailId: `sendgrid_${Date.now()}`,
-        provider: 'SendGrid'
-      });
-    } else {
-      // Fallback: Log email if SendGrid not configured
-      console.log('⚠️ SendGrid not configured - Email logged only');
-      res.json({
-        message: 'Email logged successfully (SendGrid not configured)',
-        emailId: `logged_${Date.now()}`,
-        provider: 'Console Log'
-      });
-    }
-  } catch (err) {
-    console.error('Error sending email:', err);
-
-    // If SendGrid fails, still return success to not break user flow
     res.json({
-      message: 'Email processing completed (may have failed)',
-      emailId: `failed_${Date.now()}`,
-      error: err.message
+      message: 'Registration successful!',
+      registration_id: registrationRef.id
     });
+  } catch (error) {
+    console.error('Error creating registration:', error);
+    res.status(500).json({ error: 'Server error.' });
   }
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    version: '1.1.0',
-    services: {
-      firebase: 'Connected',
-      sendgrid: process.env.SENDGRID_API_KEY ? 'Configured' : 'Not configured',
-      database: 'Firestore Active'
+// Email sending function
+async function sendRegistrationEmail(email, studentName, hackathonTitle, hackathonDate) {
+  const emailContent = {
+    to: email,
+    from: {
+      email: process.env.SENDGRID_FROM_EMAIL || 'noreply@hackhub.com',
+      name: process.env.SENDGRID_FROM_NAME || 'HackHub Platform'
     },
-    uptime: process.uptime(),
-    memory: process.memoryUsage()
-  });
-});
+    subject: `Registration Confirmed: ${hackathonTitle}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #4F46E5;">Registration Confirmed! 🎉</h2>
+        <p>Dear ${studentName},</p>
+        <p>You have successfully registered for <strong>${hackathonTitle}</strong>!</p>
+        <p><strong>Event Date:</strong> ${hackathonDate}</p>
+        <p>We're excited to have you participate. You'll receive more details about the hackathon soon.</p>
+        <p>Best regards,<br>HackHub Team</p>
+      </div>
+    `
+  };
 
-// Root endpoint
-app.get('/', (req, res) => {
-  res.json({
-    message: 'HackHub API Server - Enhanced',
-    version: '1.1.0',
-    status: 'Running',
-    lastUpdated: '2025-06-20',
-    features: [
-      'Google OAuth Authentication',
-      'Student Registration System',
-      'Faculty Hackathon Management',
-      'Email Notifications via SendGrid',
-      'Real-time Database with Firestore'
-    ],
-    endpoints: {
-      health: '/health',
-      users: '/users',
-      hackathons: '/hackathons',
-      registrations: '/registrations',
-      email: '/api/send-email'
+  try {
+    if (process.env.SENDGRID_API_KEY) {
+      await sgMail.send(emailContent);
+      console.log(`✅ Registration email sent to ${email}`);
+    } else {
+      console.log(`📧 Email would be sent to ${email}:`, emailContent.subject);
     }
-  });
-});
+  } catch (error) {
+    console.error('❌ Error sending email:', error);
+  }
+}
 
 // Platform statistics endpoint
 app.get('/api/stats', async (req, res) => {

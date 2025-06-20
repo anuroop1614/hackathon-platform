@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth } from '../../hooks/useAuth';
-import { apiService } from '../../lib/api';
-import EmailService from '../../lib/emailService';
+import { useAuthContext } from '../../hooks/AuthContext';
 import { Calendar, CheckCircle, PlusCircle } from 'lucide-react';
 
 export const StudentDashboard = () => {
-  const { user } = useAuth();
+  const { user } = useAuthContext();
   const [hackathons, setHackathons] = useState([]);
   const [registrations, setRegistrations] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -17,10 +15,11 @@ export const StudentDashboard = () => {
   const loadData = async () => {
     if (user) {
       try {
-        const [allHackathons, userRegistrations] = await Promise.all([
-          apiService.getHackathons(),
-          apiService.getRegistrationsByStudent(user.uid)
-        ]);
+        const hackathonsResponse = await fetch('https://hackathon-platform-1.onrender.com/api/hackathons');
+        const allHackathons = await hackathonsResponse.json();
+
+        // For now, we'll just set empty registrations since we need to implement this endpoint
+        const userRegistrations = [];
         setHackathons(allHackathons);
         setRegistrations(userRegistrations);
       } catch (err) {
@@ -57,13 +56,23 @@ export const StudentDashboard = () => {
     setError('');
 
     try {
-      await apiService.createRegistration({
-        hackathon_id: selectedHackathon.id,
-        student_id: user.uid,
-        name: form.name,
-        email: form.email,
-        phone: form.phone,
+      const response = await fetch('https://hackathon-platform-1.onrender.com/api/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          hackathon_id: selectedHackathon.id,
+          student_id: user.uid,
+          student_name: form.name
+        })
       });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to register');
+      }
 
       // Send registration confirmation email
       try {

@@ -1,15 +1,13 @@
 import React from 'react'
-import { useAuth } from '../hooks/useAuth'
-import { LogOut, Code, Users, Calendar, Cloud, Bell } from 'lucide-react'
+import { useAuthContext } from '../hooks/AuthContext'
+import { LogOut, Code, Users } from 'lucide-react'
 
 export const Layout = ({ children }) => {
-  const { user, signOut } = useAuth()
-  const role = localStorage.getItem('role')
+  const { user, userRole, signOut } = useAuthContext()
 
   const handleSignOut = async () => {
     try {
       await signOut()
-      localStorage.removeItem('role')
     } catch (error) {
       console.error('Error signing out:', error)
     }
@@ -28,7 +26,7 @@ export const Layout = ({ children }) => {
                 <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                   HackHub
                 </h1>
-                <p className="text-xs text-gray-500 capitalize">{role} Dashboard</p>
+                <p className="text-xs text-gray-500 capitalize">{userRole} Dashboard</p>
               </div>
             </div>
             

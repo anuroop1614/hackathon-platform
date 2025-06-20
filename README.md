@@ -1,6 +1,6 @@
-# 🚀 HackHub - Hackathon Platform
+# 🎯 HackHub - Hackathon Management Platform v2.0
 
-A modern, full-stack hackathon management platform built with React, Express.js, Firebase, and SendGrid.
+A modern, full-stack hackathon management platform built with React, Node.js, Firebase, and SendGrid. This platform enables faculty to create hackathons and students to register for them, with automated email notifications and role-based authentication.
 
 ## ✨ Features
 
