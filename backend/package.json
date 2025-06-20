@@ -1,0 +1,30 @@
+{
+  "name": "hackathon-platform-backend",
+  "version": "1.0.0",
+  "description": "Backend API for HackHub - Hackathon Management Platform",
+  "main": "server.cjs",
+  "scripts": {
+    "start": "node server.cjs",
+    "dev": "node server.cjs"
+  },
+  "engines": {
+    "node": "18.x"
+  },
+  "dependencies": {
+    "@sendgrid/mail": "^8.1.5",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "firebase-admin": "^13.4.0"
+  },
+  "keywords": [
+    "hackathon",
+    "api",
+    "express",
+    "firebase",
+    "sendgrid"
+  ],
+  "author": "HackHub Team",
+  "license": "MIT"
+}

@@ -1,7 +1,5 @@
 // API service for database operations
-const API_BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'https://hackon-cloud-project.web.app/api'
-  : 'http://localhost:3001';
+const API_BASE_URL = 'https://hackathon-platform-1.onrender.com';
 
 class ApiService {
   async request(endpoint, options = {}) {

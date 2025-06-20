@@ -5,9 +5,7 @@ export class EmailService {
   // Send registration confirmation email
   static async sendRegistrationEmail(email, hackathonTitle) {
     try {
-      const apiUrl = process.env.NODE_ENV === 'production'
-        ? 'https://hackon-cloud-project.web.app/api/send-email'
-        : '/api/send-email';
+      const apiUrl = 'https://hackathon-platform-1.onrender.com/api/send-email';
 
       await fetch(apiUrl, {
         method: 'POST',
@@ -33,9 +31,7 @@ export class EmailService {
   // Send hackathon reminder email
   static async sendHackathonReminder(email, hackathonTitle, startDate) {
     try {
-      const apiUrl = process.env.NODE_ENV === 'production'
-        ? 'https://hackon-cloud-project.web.app/api/send-email'
-        : '/api/send-email';
+      const apiUrl = 'https://hackathon-platform-1.onrender.com/api/send-email';
 
       await fetch(apiUrl, {
         method: 'POST',
@@ -60,9 +56,7 @@ export class EmailService {
   // Send hackathon creation notification to faculty
   static async sendHackathonCreatedEmail(email, hackathonTitle) {
     try {
-      const apiUrl = process.env.NODE_ENV === 'production'
-        ? 'https://hackon-cloud-project.web.app/api/send-email'
-        : '/api/send-email';
+      const apiUrl = 'https://hackathon-platform-1.onrender.com/api/send-email';
 
       await fetch(apiUrl, {
         method: 'POST',
