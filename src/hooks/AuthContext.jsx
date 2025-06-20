@@ -73,14 +73,50 @@ export const AuthProvider = ({ children }) => {
 
   const signIn = async (email, password) => {
     const cred = await signInWithEmailAndPassword(auth, email, password);
+
+    // Fetch user role after successful login
+    try {
+      const response = await fetch(`https://hackathon-platform-1.onrender.com/api/users/${cred.user.uid}`);
+      if (response.ok) {
+        const userData = await response.json();
+        setUserRole(userData.role);
+      }
+    } catch (error) {
+      console.error('Error fetching user role:', error);
+    }
+
     return { user: cred.user };
   };
 
-  const signInWithGoogle = async (role = null) => {
+  const signInWithGoogle = async (role) => {
     const cred = await signInWithPopup(auth, googleProvider);
 
-    // If role is provided (first time Google login), create user in backend
-    if (role) {
+    // Check if user already exists
+    try {
+      const response = await fetch(`https://hackathon-platform-1.onrender.com/api/users/${cred.user.uid}`);
+
+      if (response.ok) {
+        // User exists, get their role
+        const userData = await response.json();
+        setUserRole(userData.role);
+      } else {
+        // User doesn't exist, create with selected role
+        await fetch('https://hackathon-platform-1.onrender.com/api/users', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            uid: cred.user.uid,
+            email: cred.user.email,
+            role: role
+          })
+        });
+        setUserRole(role);
+      }
+    } catch (error) {
+      console.error('Error handling Google sign-in:', error);
+      // Fallback: create user with selected role
       await fetch('https://hackathon-platform-1.onrender.com/api/users', {
         method: 'POST',
         headers: {

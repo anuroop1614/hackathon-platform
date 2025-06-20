@@ -21,6 +21,8 @@ const Login = () => {
     try {
       if (isLogin) {
         await signIn(email, password);
+        // For login, we'll verify the role matches what's in the database
+        // The AuthContext will handle role fetching automatically
       } else {
         await signUp(email, password, role);
       }
@@ -37,7 +39,8 @@ const Login = () => {
     setError('');
 
     try {
-      await signInWithGoogle(isLogin ? null : role);
+      // Always pass the role for Google sign-in (for both login and signup)
+      await signInWithGoogle(role);
       navigate('/dashboard');
     } catch (error) {
       setError(error.message);
@@ -88,21 +91,43 @@ const Login = () => {
             </div>
           </div>
 
-          {!isLogin && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select your role:
-              </label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          <div className="bg-gray-50 p-4 rounded-lg border">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {isLogin ? '👤 Login as:' : '🎯 Select your role:'}
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setRole('student')}
+                className={`p-3 rounded-lg border-2 transition-all ${
+                  role === 'student'
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                    : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                }`}
               >
-                <option value="student">Student</option>
-                <option value="faculty">Faculty</option>
-              </select>
+                <div className="text-center">
+                  <div className="text-2xl mb-1">🎓</div>
+                  <div className="font-medium">Student</div>
+                  <div className="text-xs text-gray-500">Register for hackathons</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRole('faculty')}
+                className={`p-3 rounded-lg border-2 transition-all ${
+                  role === 'faculty'
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                    : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                }`}
+              >
+                <div className="text-center">
+                  <div className="text-2xl mb-1">👨‍🏫</div>
+                  <div className="font-medium">Faculty</div>
+                  <div className="text-xs text-gray-500">Create hackathons</div>
+                </div>
+              </button>
             </div>
-          )}
+          </div>
 
           <div>
             <button
