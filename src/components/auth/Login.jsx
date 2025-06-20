@@ -10,6 +10,8 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+
+
   const { signIn, signUp, signInWithGoogle } = useAuthContext();
   const navigate = useNavigate();
 
