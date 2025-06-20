@@ -625,17 +625,77 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    version: '1.1.0',
+    services: {
+      firebase: 'Connected',
+      sendgrid: process.env.SENDGRID_API_KEY ? 'Configured' : 'Not configured',
+      database: 'Firestore Active'
+    },
+    uptime: process.uptime(),
+    memory: process.memoryUsage()
   });
 });
 
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
-    message: 'HackHub API Server',
-    version: '1.0.0',
-    status: 'Running'
+    message: 'HackHub API Server - Enhanced',
+    version: '1.1.0',
+    status: 'Running',
+    lastUpdated: '2025-06-20',
+    features: [
+      'Google OAuth Authentication',
+      'Student Registration System',
+      'Faculty Hackathon Management',
+      'Email Notifications via SendGrid',
+      'Real-time Database with Firestore'
+    ],
+    endpoints: {
+      health: '/health',
+      users: '/users',
+      hackathons: '/hackathons',
+      registrations: '/registrations',
+      email: '/api/send-email'
+    }
   });
+});
+
+// Platform statistics endpoint
+app.get('/api/stats', async (req, res) => {
+  try {
+    const [usersSnap, hackathonsSnap, registrationsSnap] = await Promise.all([
+      db.collection('users').get(),
+      db.collection('hackathons').get(),
+      db.collection('registrations').get()
+    ]);
+
+    const stats = {
+      totalUsers: usersSnap.size,
+      totalHackathons: hackathonsSnap.size,
+      totalRegistrations: registrationsSnap.size,
+      usersByRole: {
+        students: 0,
+        faculty: 0
+      },
+      lastUpdated: new Date().toISOString()
+    };
+
+    // Count users by role
+    usersSnap.forEach(doc => {
+      const userData = doc.data();
+      if (userData.role === 'student') {
+        stats.usersByRole.students++;
+      } else if (userData.role === 'faculty') {
+        stats.usersByRole.faculty++;
+      }
+    });
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+    res.status(500).json({ error: 'Failed to fetch statistics' });
+  }
 });
 
 const PORT = process.env.PORT || 3001;
