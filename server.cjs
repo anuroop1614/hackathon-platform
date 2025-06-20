@@ -21,11 +21,28 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 // Initialize Firebase Admin SDK
-const serviceAccount = require('./serviceAccountKey.json');
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
-const db = admin.firestore();
+let db;
+try {
+  if (process.env.NODE_ENV === 'production') {
+    // Production: Use environment variables or default credentials
+    console.log('🔥 Initializing Firebase in production mode...');
+    admin.initializeApp({
+      projectId: 'hackon-cloud-project'
+    });
+  } else {
+    // Development: Use service account key file
+    console.log('🔥 Initializing Firebase in development mode...');
+    const serviceAccount = require('./serviceAccountKey.json');
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+  }
+  db = admin.firestore();
+  console.log('✅ Firebase initialized successfully');
+} catch (error) {
+  console.error('❌ Firebase initialization failed:', error);
+  process.exit(1);
+}
 
 // Configure SendGrid
 if (process.env.SENDGRID_API_KEY) {
